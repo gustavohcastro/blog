@@ -10,12 +10,16 @@ class New extends Component{
 
         this.state = {
             titulo : '',
-            imagem : '',
+            imagem : null,
+            url : '',
             descricao : '',
-            alert : ''
+            alert : '',
+            progress : 0
         };
 
-        this.cadastrar = this.cadastrar.bind(this)
+        this.cadastrar = this.cadastrar.bind(this);
+        this.handleFile = this.handleFile.bind(this);
+        this.handleUpload = this.handleUpload.bind(this);
 
     }
 
@@ -30,12 +34,16 @@ class New extends Component{
     cadastrar = async(e) =>{
         e.preventDefault();
 
-        if(this.state.titulo !== '' && this.state.imagem !== '' && this.state.descricao !== ''){
+        if(this.state.titulo !== '' && 
+            this.state.url !== '' &&
+            this.state.imagem !== null && 
+            this.state.url !== '' && 
+            this.state.descricao !== ''){
             let posts = firebase.app.ref('posts');
             let chave = posts.push().key;
             await posts.child(chave).set({
                 titulo : this.state.titulo,
-                imagem : this.state.imagem,
+                imagem : this.state.url,
                 descricao : this.state.descricao,
                 autor : localStorage.name
             })
@@ -43,6 +51,47 @@ class New extends Component{
         }else{
            this.setState({alert : 'Preencha todos os campos!'})
         }
+    }
+
+   handleFile = async (e) => {
+       if(e.target.files[0]) {
+            const image = e.target.files[0];
+
+            if (image.type === 'image/png' || image.type === 'image/jpeg'){
+                await this.setState({imagem : image})
+                this.handleUpload();
+            }else{
+                alert("Envie uma imagem PNG ou JPEG");
+                this.setState({image : null})
+                return null;
+            }
+       }
+       
+    }
+    handleUpload = async() => {
+        const {imagem} = this.state;
+        const currentUid = firebase.getCurrentUid();
+        const uploadTaks = firebase.storage.ref(`images/${currentUid}/${imagem.name}`).put(imagem);
+
+        await uploadTaks.on('state_changed', 
+        (snapshot) => {
+            //progesso
+            const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+            this.setState({progress : progress})
+        },
+        (error) =>{
+            //error
+            console.log(error);
+        },
+        ()=>{
+            //success
+            firebase.storage.ref(`images/${currentUid}`)
+            .child(imagem.name).getDownloadURL()
+            .then( url => {
+                this.setState({url : url})
+            })
+           
+        })
     }
     render() {
         return(
@@ -56,9 +105,13 @@ class New extends Component{
                     <input type='text' placeholder="Título do Post" autoFocus value={this.state.titulo}
                     onChange={(e) => {this.setState({titulo : e.target.value})}}/><br/>
 
-                    <label>Url da Imagem</label><br/>
-                    <input type='text' placeholder="URL da Capa" value={this.state.imagem}
-                    onChange={(e) => {this.setState({imagem : e.target.value})}}/><br/>
+                    <label>Imagem de Capa</label><br/>
+                    <input type='file' onChange={this.handleFile}/><br/>
+                    {this.state.url !== '' ?
+                        <img src={this.state.url} width="250" height="150" alt="Capa do Post" />
+                        :
+                        <progress value={this.state.progress} max="100" />
+                    }
                    
                     <label>Descrição</label><br/>
                     <textarea type='text' placeholder="Descrição" value={this.state.descricao}
